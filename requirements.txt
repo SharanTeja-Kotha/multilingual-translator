@@ -1,12 +1,20 @@
 streamlit>=1.30
+
+# Translation
 googletrans==4.0.0-rc1
+groq
+
+# Voice
 gtts
 pydub
 SpeechRecognition
 streamlit-mic-recorder
+
+# Image OCR
 pytesseract
 Pillow
-groq
-python-dotenv
 opencv-python-headless
 numpy
+
+# Utils
+python-dotenv

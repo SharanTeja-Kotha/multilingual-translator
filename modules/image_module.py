@@ -35,34 +35,24 @@ def image_translation_ui():
         st.image(image, use_container_width=True)
 
         try:
-            # -------------------------------
-            # 🔥 PREPROCESS IMAGE (KEY FIX)
-            # -------------------------------
+            # 🔥 PREPROCESS
             img = np.array(image)
-
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-            # 🔥 VERY IMPORTANT: Resize (fixes cloud accuracy issue)
+            # 🔥 KEY FIX (CLOUD ACCURACY)
             gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 
-            # Noise reduction
             gray = cv2.bilateralFilter(gray, 9, 75, 75)
-
-            # Threshold
             _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
 
-            # -------------------------------
-            # 🔹 OCR (IMPROVED CONFIG)
-            # -------------------------------
+            # 🔥 MULTI-LANGUAGE OCR
             extracted_text = pytesseract.image_to_string(
                 thresh,
-                lang="eng",
-                config="--oem 3 --psm 6"
+                lang="eng+hin+tel+spa+fra",
+                config="--oem 3 --psm 11"
             )
 
-            # -------------------------------
             # 🔥 CLEAN TEXT
-            # -------------------------------
             extracted_text = extracted_text.strip().replace("\x0c", "")
             extracted_text = re.sub(r'\s+', ' ', extracted_text)
 
@@ -73,9 +63,7 @@ def image_translation_ui():
             st.subheader("📝 Extracted Text")
             st.code(extracted_text)
 
-            # -------------------------------
-            # 🔹 TRANSLATE
-            # -------------------------------
+            # 🔹 TRANSLATION
             translated = translate_text(extracted_text, target_language, context)
 
             st.subheader("🌐 Translation")
