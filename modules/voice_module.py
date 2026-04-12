@@ -7,11 +7,20 @@ from gtts import gTTS
 from utils import translate_text
 import io
 
-def speech_to_text(audio_bytes, file_type="webm"):
+def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
     recognizer = sr.Recognizer()
 
+    # 🔥 LANGUAGE MAP (CRITICAL FIX)
+    speech_lang_map = {
+        "English": "en-IN",
+        "Hindi": "hi-IN",
+        "Telugu": "te-IN",
+        "Spanish": "es-ES",
+        "French": "fr-FR"
+    }
+
     try:
-        # ✅ FORCE CORRECT AUDIO DECODING
+        # ✅ CORRECT AUDIO DECODING
         if file_type == "opus":
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="ogg")
         elif file_type == "webm":
@@ -19,7 +28,7 @@ def speech_to_text(audio_bytes, file_type="webm"):
         else:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
 
-        # convert to wav (no distortion)
+        # convert to wav (NO distortion)
         wav_buffer = io.BytesIO()
         audio_segment.export(wav_buffer, format="wav")
         wav_buffer.seek(0)
@@ -27,12 +36,11 @@ def speech_to_text(audio_bytes, file_type="webm"):
         with sr.AudioFile(wav_buffer) as source:
             audio_data = recognizer.record(source)
 
-        # ✅ TRY AUTO DETECTION FIRST
-        try:
-            text = recognizer.recognize_google(audio_data)
-        except:
-            # fallback
-            text = recognizer.recognize_google(audio_data, language="en-IN")
+        # 🔥 FINAL FIX: ALWAYS USE LANGUAGE HINT
+        text = recognizer.recognize_google(
+            audio_data,
+            language=speech_lang_map.get(target_language, "en-IN")
+        )
 
         return text
 
@@ -47,7 +55,7 @@ def speech_to_text(audio_bytes, file_type="webm"):
 
 
 def voice_translation_ui():
-    st.subheader("🎤 Voice Translator (Final Stable Version)")
+    st.subheader("🎤 Voice Translator (Final Version)")
 
     target_language = st.selectbox(
         "Target Language",
@@ -67,7 +75,7 @@ def voice_translation_ui():
         "French": "fr"
     }
 
-    st.info("Click mic → Speak clearly → Stop")
+    st.info("Click mic → Speak → Stop")
 
     audio = mic_recorder(
         start_prompt="🎙️ Start Recording",
@@ -80,7 +88,11 @@ def voice_translation_ui():
     if audio:
         st.success("Audio recorded successfully ✅")
 
-        text = speech_to_text(audio["bytes"], "webm")
+        text = speech_to_text(
+            audio["bytes"],
+            file_type="webm",
+            target_language=target_language
+        )
 
         if text:
             st.success(f"📝 Speech:\n\n{text}")
@@ -88,7 +100,10 @@ def voice_translation_ui():
             translated = translate_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
-            tts = gTTS(text=translated, lang=lang_code_map.get(target_language, "en"))
+            tts = gTTS(
+                text=translated,
+                lang=lang_code_map.get(target_language, "en")
+            )
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
@@ -114,7 +129,11 @@ def voice_translation_ui():
         file_type = uploaded_file.name.split(".")[-1].lower()
         audio_bytes = uploaded_file.read()
 
-        text = speech_to_text(audio_bytes, file_type)
+        text = speech_to_text(
+            audio_bytes,
+            file_type=file_type,
+            target_language=target_language
+        )
 
         if text:
             st.success(f"📝 Detected Text:\n\n{text}")
@@ -122,7 +141,10 @@ def voice_translation_ui():
             translated = translate_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
-            tts = gTTS(text=translated, lang=lang_code_map.get(target_language, "en"))
+            tts = gTTS(
+                text=translated,
+                lang=lang_code_map.get(target_language, "en")
+            )
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
