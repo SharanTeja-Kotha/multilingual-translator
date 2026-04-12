@@ -7,7 +7,7 @@ from gtts import gTTS
 from utils import translate_text
 
 def voice_translation_ui():
-    st.subheader("🎤 Voice Translator (Final Version)")
+    st.subheader("🎤 Voice Translator (Final Stable Version)")
 
     target_language = st.selectbox(
         "Target Language",
@@ -34,9 +34,7 @@ def voice_translation_ui():
         stop_prompt="⏹️ Stop Recording"
     )
 
-    # =====================================================
-    # 🎤 MIC RECORDING (FINAL FIXED)
-    # =====================================================
+    # ================= MIC =================
     if audio:
         st.success("Audio recorded successfully ✅")
 
@@ -46,19 +44,17 @@ def voice_translation_ui():
 
         wav_path = webm_path.replace(".webm", ".wav")
 
-        # 🔥 CLEAN AUDIO (IMPORTANT)
+        # ✅ NATURAL AUDIO (NO DISTORTION)
         sound = AudioSegment.from_file(webm_path, format="webm")
-        sound = sound.set_frame_rate(16000).set_channels(1).normalize()
         sound.export(wav_path, format="wav")
 
         recognizer = sr.Recognizer()
 
         try:
             with sr.AudioFile(wav_path) as source:
-                # 🔥 Better recording control
-                audio_data = recognizer.record(source, duration=10)
+                audio_data = recognizer.record(source)
 
-            # ✅ AUTO LANGUAGE DETECTION (NO FORCING)
+            # ✅ AUTO DETECT (ORIGINAL WORKING BEHAVIOR)
             text = recognizer.recognize_google(audio_data)
 
             st.success(f"📝 Speech:\n\n{text}")
@@ -66,7 +62,6 @@ def voice_translation_ui():
             translated = translate_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
-            # 🔊 Text to Speech
             tts = gTTS(text=translated, lang=lang_code_map.get(target_language, "en"))
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
@@ -74,20 +69,18 @@ def voice_translation_ui():
                 st.audio(fp.name)
 
         except sr.UnknownValueError:
-            st.error("❌ Could not understand audio. Try speaking clearly.")
+            st.error("❌ Could not understand audio.")
         except sr.RequestError:
-            st.error("❌ Speech service unavailable. Try again later.")
+            st.error("❌ Speech service unavailable.")
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
-    # =====================================================
-    # 📁 AUDIO FILE UPLOAD (FINAL FIXED)
-    # =====================================================
+    # ================= FILE =================
     st.divider()
     st.subheader("📁 Upload Audio File")
 
     uploaded_file = st.file_uploader(
-        "Upload audio (WhatsApp / Voice Note)",
+        "Upload audio",
         type=["mp3", "wav", "m4a", "webm", "ogg", "opus"]
     )
 
@@ -107,8 +100,7 @@ def voice_translation_ui():
             else:
                 sound = AudioSegment.from_file(input_path)
 
-            # 🔥 CLEAN AUDIO
-            sound = sound.set_frame_rate(16000).set_channels(1).normalize()
+            # ✅ NATURAL AUDIO
             sound.export(wav_path, format="wav")
 
         except Exception as e:
@@ -116,15 +108,13 @@ def voice_translation_ui():
             return
 
         st.audio(wav_path)
-        st.caption("🎧 Uploaded Audio")
 
         recognizer = sr.Recognizer()
 
         try:
             with sr.AudioFile(wav_path) as source:
-                audio_data = recognizer.record(source, duration=10)
+                audio_data = recognizer.record(source)
 
-            # ✅ AUTO LANGUAGE DETECTION
             text = recognizer.recognize_google(audio_data)
 
             st.success(f"📝 Detected Text:\n\n{text}")
@@ -132,16 +122,11 @@ def voice_translation_ui():
             translated = translate_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
-            # 🔊 TTS Output
             tts = gTTS(text=translated, lang=lang_code_map.get(target_language, "en"))
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
                 st.audio(fp.name)
 
-        except sr.UnknownValueError:
-            st.error("❌ Could not understand audio.")
-        except sr.RequestError:
-            st.error("❌ Speech service unavailable.")
         except Exception as e:
             st.error(f"Error: {str(e)}")
