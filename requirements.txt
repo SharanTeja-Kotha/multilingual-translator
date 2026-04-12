@@ -1,0 +1,9 @@
+streamlit
+openai
+python-dotenv
+SpeechRecognition
+gTTS
+opencv-python
+mediapipe
+pytesseract
+Pillow
