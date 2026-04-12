@@ -1,10 +1,12 @@
-streamlit
+streamlit>=1.30
 googletrans==4.0.0-rc1
 gtts
 pydub
-speechrecognition
+SpeechRecognition
 streamlit-mic-recorder
 pytesseract
 Pillow
 groq
 python-dotenv
+opencv-python-headless
+numpy
