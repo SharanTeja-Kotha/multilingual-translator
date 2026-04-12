@@ -5,9 +5,49 @@ from pydub import AudioSegment
 import tempfile
 from gtts import gTTS
 from utils import translate_text
+import io
+
+def speech_to_text(audio_bytes, file_type="webm"):
+    recognizer = sr.Recognizer()
+
+    try:
+        # ✅ FORCE CORRECT AUDIO DECODING
+        if file_type == "opus":
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="ogg")
+        elif file_type == "webm":
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="webm")
+        else:
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+
+        # convert to wav (no distortion)
+        wav_buffer = io.BytesIO()
+        audio_segment.export(wav_buffer, format="wav")
+        wav_buffer.seek(0)
+
+        with sr.AudioFile(wav_buffer) as source:
+            audio_data = recognizer.record(source)
+
+        # ✅ TRY AUTO DETECTION FIRST
+        try:
+            text = recognizer.recognize_google(audio_data)
+        except:
+            # fallback
+            text = recognizer.recognize_google(audio_data, language="en-IN")
+
+        return text
+
+    except sr.UnknownValueError:
+        return None
+    except sr.RequestError:
+        st.error("Speech service unavailable")
+        return None
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        return None
+
 
 def voice_translation_ui():
-    st.subheader("🎤 Voice Translator (Enhanced Stable Version)")
+    st.subheader("🎤 Voice Translator (Final Stable Version)")
 
     target_language = st.selectbox(
         "Target Language",
@@ -27,15 +67,6 @@ def voice_translation_ui():
         "French": "fr"
     }
 
-    # 🔥 Language hint (kept but optional fallback)
-    speech_lang_map = {
-        "English": "en-IN",
-        "Hindi": "hi-IN",
-        "Telugu": "te-IN",
-        "Spanish": "es-ES",
-        "French": "fr-FR"
-    }
-
     st.info("Click mic → Speak clearly → Stop")
 
     audio = mic_recorder(
@@ -49,32 +80,9 @@ def voice_translation_ui():
     if audio:
         st.success("Audio recorded successfully ✅")
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as f:
-            f.write(audio["bytes"])
-            webm_path = f.name
+        text = speech_to_text(audio["bytes"], "webm")
 
-        wav_path = webm_path.replace(".webm", ".wav")
-
-        # ✅ NATURAL AUDIO (NO DISTORTION)
-        sound = AudioSegment.from_file(webm_path, format="webm")
-        sound.export(wav_path, format="wav")
-
-        recognizer = sr.Recognizer()
-
-        try:
-            with sr.AudioFile(wav_path) as source:
-                audio_data = recognizer.record(source)
-
-            # ✅ TRY AUTO DETECT FIRST (BEST)
-            try:
-                text = recognizer.recognize_google(audio_data)
-            except:
-                # fallback if needed
-                text = recognizer.recognize_google(
-                    audio_data,
-                    language=speech_lang_map.get(target_language, "en-IN")
-                )
-
+        if text:
             st.success(f"📝 Speech:\n\n{text}")
 
             translated = translate_text(text, target_language, context)
@@ -85,13 +93,8 @@ def voice_translation_ui():
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
                 st.audio(fp.name)
-
-        except sr.UnknownValueError:
+        else:
             st.error("❌ Could not understand audio")
-        except sr.RequestError:
-            st.error("❌ Speech service unavailable")
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
 
     # =====================================================
     # 📁 FILE UPLOAD
@@ -106,46 +109,14 @@ def voice_translation_ui():
 
     if uploaded_file:
         st.success("Audio uploaded successfully ✅")
+        st.audio(uploaded_file)
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as temp_audio:
-            temp_audio.write(uploaded_file.read())
-            input_path = temp_audio.name
-
-        wav_path = input_path + ".wav"
         file_type = uploaded_file.name.split(".")[-1].lower()
+        audio_bytes = uploaded_file.read()
 
-        try:
-            # ✅ HANDLE OPUS PROPERLY
-            if file_type == "opus":
-                sound = AudioSegment.from_file(input_path, format="ogg")
-            else:
-                sound = AudioSegment.from_file(input_path)
+        text = speech_to_text(audio_bytes, file_type)
 
-            # ✅ NO DISTORTION
-            sound.export(wav_path, format="wav")
-
-        except Exception as e:
-            st.error(f"Audio conversion failed: {str(e)}")
-            return
-
-        st.audio(wav_path)
-        st.caption("🎧 Uploaded Audio")
-
-        recognizer = sr.Recognizer()
-
-        try:
-            with sr.AudioFile(wav_path) as source:
-                audio_data = recognizer.record(source)
-
-            # ✅ AUTO DETECT FIRST
-            try:
-                text = recognizer.recognize_google(audio_data)
-            except:
-                text = recognizer.recognize_google(
-                    audio_data,
-                    language=speech_lang_map.get(target_language, "en-IN")
-                )
-
+        if text:
             st.success(f"📝 Detected Text:\n\n{text}")
 
             translated = translate_text(text, target_language, context)
@@ -156,10 +127,5 @@ def voice_translation_ui():
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 tts.save(fp.name)
                 st.audio(fp.name)
-
-        except sr.UnknownValueError:
-            st.error("❌ Could not understand audio")
-        except sr.RequestError:
-            st.error("❌ Speech service unavailable")
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+        else:
+            st.error("❌ Could not process audio")
