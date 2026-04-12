@@ -1,9 +1,10 @@
 streamlit
-openai
-python-dotenv
-SpeechRecognition
-gTTS
-opencv-python
-mediapipe
+googletrans==4.0.0-rc1
+gtts
+pydub
+speechrecognition
+streamlit-mic-recorder
 pytesseract
 Pillow
+groq
+python-dotenv
