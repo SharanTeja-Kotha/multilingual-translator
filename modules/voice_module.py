@@ -8,11 +8,15 @@ from utils import ask_ai
 from googletrans import Translator
 import io
 
-def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
+
+# -------------------------------
+# 🔥 SPEECH TO TEXT (FINAL STABLE)
+# -------------------------------
+def speech_to_text(audio_bytes, file_type="webm"):
     recognizer = sr.Recognizer()
 
     try:
-        # ✅ CORRECT AUDIO DECODING
+        # ✅ Safe audio decoding
         if file_type in ["opus", "ogg"]:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="ogg")
         elif file_type == "webm":
@@ -22,19 +26,20 @@ def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
         else:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
 
-        # convert to wav (NO distortion)
+        # Convert to WAV
         wav_buffer = io.BytesIO()
+        audio_segment = audio_segment.set_frame_rate(16000).set_channels(1)
         audio_segment.export(wav_buffer, format="wav")
         wav_buffer.seek(0)
 
         with sr.AudioFile(wav_buffer) as source:
+            recognizer.adjust_for_ambient_noise(source, duration=0.3)
             audio_data = recognizer.record(source)
 
-        # Removed forced language hint
-        # Use automatic language detection for speech input
-        text = recognizer.recognize_google(audio_data, language="auto")
+        # 🔥 NO language forcing (IMPORTANT)
+        text = recognizer.recognize_google(audio_data)
 
-        return text
+        return text.strip()
 
     except sr.UnknownValueError:
         return None
@@ -42,9 +47,13 @@ def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
         st.error("Speech service unavailable")
         return None
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"Audio error: {str(e)}")
         return None
 
+
+# -------------------------------
+# 🔥 TRANSLATION (FINAL FIXED)
+# -------------------------------
 def translate_voice_text(text: str, target_language: str, context: str) -> str:
     lang_map = {
         "English": "en",
@@ -54,44 +63,52 @@ def translate_voice_text(text: str, target_language: str, context: str) -> str:
         "French": "fr"
     }
 
+    translator = Translator()
+
     try:
-        translator = Translator()
-        
-        # Detect source language
-        detected_lang = translator.detect(text).lang
+        detected = translator.detect(text)
+        src_lang = detected.lang
         dest_lang = lang_map.get(target_language, "en")
-        
-        # ALWAYS force translation using src and dest
-        translated = translator.translate(
-            text,
-            src=detected_lang,
-            dest=dest_lang
-        ).text
 
-        # Ensure translation never returns same text unless truly identical
-        if len(text.split()) <= 2:
-            return translated
+        # 🔥 If same language → skip translation
+        if src_lang == dest_lang:
+            translated = text
+        else:
+            translated = translator.translate(
+                text,
+                src=src_lang,
+                dest=dest_lang
+            ).text
 
-        # Maintain existing Tone functionality using ask_ai
-        prompt = f"""
+        # 🔥 Tone improvement (SAFE)
+        if translated and len(translated.split()) > 2:
+            try:
+                prompt = f"""
 Rewrite the sentence in a {context} tone.
 
 STRICT RULES:
 - Do NOT change meaning
-- Do NOT add new words
-- Do NOT translate again
-- Keep same language
-- Only slightly adjust tone
+- Do NOT change language
+- Keep sentence same, only tone adjust
 
 Sentence: {translated}
 """
-        improved = ask_ai(prompt)
+                improved = ask_ai(prompt)
 
-        return improved.strip().replace('"', '') if improved else translated
+                if improved:
+                    translated = improved.strip().replace('"', '')
+            except:
+                pass
+
+        return translated
 
     except Exception:
-        return translated if 'translated' in locals() else "Translation error"
+        return text  # fallback
 
+
+# -------------------------------
+# 🎤 UI
+# -------------------------------
 def voice_translation_ui():
     st.subheader("🎤 Voice Translator (Final Version)")
 
@@ -120,17 +137,11 @@ def voice_translation_ui():
         stop_prompt="⏹️ Stop Recording"
     )
 
-    # =====================================================
-    # 🎤 MIC RECORDING
-    # =====================================================
+    # 🎤 MIC
     if audio:
         st.success("Audio recorded successfully ✅")
 
-        text = speech_to_text(
-            audio["bytes"],
-            file_type="webm",
-            target_language=target_language
-        )
+        text = speech_to_text(audio["bytes"], "webm")
 
         if text:
             st.success(f"📝 Speech:\n\n{text}")
@@ -138,20 +149,22 @@ def voice_translation_ui():
             translated = translate_voice_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
-            tts = gTTS(
-                text=translated,
-                lang=lang_code_map.get(target_language, "en")
-            )
+            try:
+                tts = gTTS(
+                    text=translated,
+                    lang=lang_code_map.get(target_language, "en")
+                )
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-                tts.save(fp.name)
-                st.audio(fp.name)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+                    tts.save(fp.name)
+                    st.audio(fp.name)
+            except:
+                st.warning("Audio playback not available")
+
         else:
             st.error("❌ Could not understand audio")
 
-    # =====================================================
     # 📁 FILE UPLOAD
-    # =====================================================
     st.divider()
     st.subheader("📁 Upload Audio File")
 
@@ -167,11 +180,7 @@ def voice_translation_ui():
         file_type = uploaded_file.name.split(".")[-1].lower()
         audio_bytes = uploaded_file.read()
 
-        text = speech_to_text(
-            audio_bytes,
-            file_type=file_type,
-            target_language=target_language
-        )
+        text = speech_to_text(audio_bytes, file_type)
 
         if text:
             st.success(f"📝 Detected Text:\n\n{text}")
@@ -179,13 +188,17 @@ def voice_translation_ui():
             translated = translate_voice_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
-            tts = gTTS(
-                text=translated,
-                lang=lang_code_map.get(target_language, "en")
-            )
+            try:
+                tts = gTTS(
+                    text=translated,
+                    lang=lang_code_map.get(target_language, "en")
+                )
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-                tts.save(fp.name)
-                st.audio(fp.name)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+                    tts.save(fp.name)
+                    st.audio(fp.name)
+            except:
+                st.warning("Audio playback not available")
+
         else:
             st.error("❌ Could not process audio")
