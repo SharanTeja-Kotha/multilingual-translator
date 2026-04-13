@@ -4,27 +4,21 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import tempfile
 from gtts import gTTS
-from utils import translate_text
+from utils import ask_ai
+from googletrans import Translator
 import io
 
 def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
     recognizer = sr.Recognizer()
 
-    # 🔥 LANGUAGE MAP (CRITICAL FIX)
-    speech_lang_map = {
-        "English": "en-IN",
-        "Hindi": "hi-IN",
-        "Telugu": "te-IN",
-        "Spanish": "es-ES",
-        "French": "fr-FR"
-    }
-
     try:
         # ✅ CORRECT AUDIO DECODING
-        if file_type == "opus":
+        if file_type in ["opus", "ogg"]:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="ogg")
         elif file_type == "webm":
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="webm")
+        elif file_type in ["mp3", "wav", "m4a"]:
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format=file_type)
         else:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
 
@@ -36,11 +30,9 @@ def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
         with sr.AudioFile(wav_buffer) as source:
             audio_data = recognizer.record(source)
 
-        # 🔥 FINAL FIX: ALWAYS USE LANGUAGE HINT
-        text = recognizer.recognize_google(
-            audio_data,
-            language=speech_lang_map.get(target_language, "en-IN")
-        )
+        # Removed forced language hint
+        # Use automatic language detection for speech input
+        text = recognizer.recognize_google(audio_data, language="auto")
 
         return text
 
@@ -53,6 +45,52 @@ def speech_to_text(audio_bytes, file_type="webm", target_language="English"):
         st.error(f"Error: {str(e)}")
         return None
 
+def translate_voice_text(text: str, target_language: str, context: str) -> str:
+    lang_map = {
+        "English": "en",
+        "Hindi": "hi",
+        "Telugu": "te",
+        "Spanish": "es",
+        "French": "fr"
+    }
+
+    try:
+        translator = Translator()
+        
+        # Detect source language
+        detected_lang = translator.detect(text).lang
+        dest_lang = lang_map.get(target_language, "en")
+        
+        # ALWAYS force translation using src and dest
+        translated = translator.translate(
+            text,
+            src=detected_lang,
+            dest=dest_lang
+        ).text
+
+        # Ensure translation never returns same text unless truly identical
+        if len(text.split()) <= 2:
+            return translated
+
+        # Maintain existing Tone functionality using ask_ai
+        prompt = f"""
+Rewrite the sentence in a {context} tone.
+
+STRICT RULES:
+- Do NOT change meaning
+- Do NOT add new words
+- Do NOT translate again
+- Keep same language
+- Only slightly adjust tone
+
+Sentence: {translated}
+"""
+        improved = ask_ai(prompt)
+
+        return improved.strip().replace('"', '') if improved else translated
+
+    except Exception:
+        return translated if 'translated' in locals() else "Translation error"
 
 def voice_translation_ui():
     st.subheader("🎤 Voice Translator (Final Version)")
@@ -97,7 +135,7 @@ def voice_translation_ui():
         if text:
             st.success(f"📝 Speech:\n\n{text}")
 
-            translated = translate_text(text, target_language, context)
+            translated = translate_voice_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
             tts = gTTS(
@@ -138,7 +176,7 @@ def voice_translation_ui():
         if text:
             st.success(f"📝 Detected Text:\n\n{text}")
 
-            translated = translate_text(text, target_language, context)
+            translated = translate_voice_text(text, target_language, context)
             st.success(f"🌐 Translation:\n\n{translated}")
 
             tts = gTTS(
